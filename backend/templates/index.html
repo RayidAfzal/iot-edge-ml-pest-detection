@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Edge-Intelligent Pest Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: #121829;
+      --accent1: #ff6b6b;
+      --accent2: #ffa726;
+      --good: #3dd68c;
+      --text: #f5f5ff;
+      --muted: #8a90b2;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1b2440, #050814 60%);
+      color: var(--text);
+    }
+
+    header {
+      padding: 14px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    header .subtitle { font-size: 12px; color: var(--muted); }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 18px 16px 32px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: linear-gradient(145deg, #131a2b, #090d18);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .card h2 { margin: 0 0 8px 0; font-size: 15px; font-weight: 500; }
+    .card small { color: var(--muted); font-size: 11px; }
+
+    canvas {
+      width: 100% !important;
+      height: 260px !important;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      text-align: center;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #fff;
+      min-width: 60px;
+      display: inline-block;
+    }
+
+    .badge-tomato { background: var(--accent1); }
+    .badge-carrot { background: var(--accent2); }
+
+    /* 🔥 Pest badges (Phase C Step 3) */
+    .badge-pest { min-width: 90px; }
+    .pest-none { background: var(--good); }
+    .pest-medium { background: #ffa726; }
+    .pest-high { background: #ff6b6b; }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+<header>
+  <div>
+    <h1>Edge-Intelligent Pest Monitoring</h1>
+    <div class="subtitle">Tomato & Carrot · ML-driven pest risk</div>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <div class="card">
+      <h2>Temperature (°C)</h2>
+      <canvas id="tempChart"></canvas>
+    </div>
+    <div class="card">
+      <h2>Humidity (%)</h2>
+      <canvas id="humChart"></canvas>
+    </div>
+    <div class="card">
+      <h2>ML Pest Risk (%)</h2>
+      <canvas id="riskChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Latest Readings</h2>
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Node</th>
+          <th>Temp</th>
+          <th>Hum</th>
+          <th>Soil</th>
+          <th>Light</th>
+          <th>Gas</th>
+          <th>ML Risk (%)</th>
+          <th>Pest</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const REFRESH_MS = 5000;
+let tempChart, humChart, riskChart;
+
+function createCharts() {
+  const baseOpts = {
+    responsive: true,
+    plugins: { legend: { labels: { color: "#f5f5ff" } } },
+    scales: {
+      x: { ticks: { color: "#8a90b2" } },
+      y: { ticks: { color: "#8a90b2" } }
+    }
+  };
+
+  tempChart = new Chart(tempChartEl(), {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "Tomato", data: [] }, { label: "Carrot", data: [] }] },
+    options: baseOpts
+  });
+
+  humChart = new Chart(humChartEl(), {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "Tomato", data: [] }, { label: "Carrot", data: [] }] },
+    options: baseOpts
+  });
+
+  riskChart = new Chart(riskChartEl(), {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "Tomato", data: [] }, { label: "Carrot", data: [] }] },
+    options: { ...baseOpts, scales: { y: { min: 0, max: 100 } } }
+  });
+}
+
+const tempChartEl = () => document.getElementById("tempChart");
+const humChartEl = () => document.getElementById("humChart");
+const riskChartEl = () => document.getElementById("riskChart");
+
+function formatTime(ts) {
+  return ts ? new Date(ts * 1000).toLocaleTimeString() : "";
+}
+
+async function fetchLatest() {
+  const res = await fetch("/api/latest");
+  updateDashboard(await res.json());
+}
+
+function updateDashboard(rows) {
+  const labels = [], tTemp=[], cTemp=[], tHum=[], cHum=[], tRisk=[], cRisk=[];
+
+  rows.forEach(r => {
+    labels.push(formatTime(r.timestamp));
+    if (r.node === "tomato") {
+      tTemp.push(r.temp); cTemp.push(null);
+      tHum.push(r.hum); cHum.push(null);
+      tRisk.push(r.ml_risk ? r.ml_risk*100 : null); cRisk.push(null);
+    } else {
+      tTemp.push(null); cTemp.push(r.temp);
+      tHum.push(null); cHum.push(r.hum);
+      tRisk.push(null); cRisk.push(r.ml_risk ? r.ml_risk*100 : null);
+    }
+  });
+
+  tempChart.data.labels = humChart.data.labels = riskChart.data.labels = labels;
+  tempChart.data.datasets[0].data = tTemp;
+  tempChart.data.datasets[1].data = cTemp;
+  humChart.data.datasets[0].data = tHum;
+  humChart.data.datasets[1].data = cHum;
+  riskChart.data.datasets[0].data = tRisk;
+  riskChart.data.datasets[1].data = cRisk;
+
+  tempChart.update(); humChart.update(); riskChart.update();
+
+  const tbody = document.querySelector("#data-table tbody");
+  tbody.innerHTML = "";
+
+  rows.slice().reverse().forEach(r => {
+    const riskPct = r.ml_risk != null ? r.ml_risk * 100 : null;
+    let pestClass = "pest-none";
+    if (r.ml_pred_label && r.ml_pred_label !== "No Pest") {
+      pestClass = riskPct >= 70 ? "pest-high" : "pest-medium";
+    }
+
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${formatTime(r.timestamp)}</td>
+        <td><span class="badge ${r.node === "tomato" ? "badge-tomato" : "badge-carrot"}">${r.node}</span></td>
+        <td>${r.temp?.toFixed(1) ?? ""}</td>
+        <td>${r.hum?.toFixed(1) ?? ""}</td>
+        <td>${r.soil?.toFixed(1) ?? ""}</td>
+        <td>${r.light?.toFixed(1) ?? ""}</td>
+        <td>${r.gas?.toFixed(1) ?? ""}</td>
+        <td style="font-weight:600">${riskPct ? riskPct.toFixed(1)+"%" : "-"}</td>
+        <td><span class="badge badge-pest ${pestClass}">${r.ml_pred_label ?? "Unknown"}</span></td>
+      </tr>
+    `);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  createCharts();
+  fetchLatest();
+  setInterval(fetchLatest, REFRESH_MS);
+});
+</script>
+</body>
+</html>
